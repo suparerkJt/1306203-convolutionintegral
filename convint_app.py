@@ -393,7 +393,7 @@ let tGrid=new Float64Array(0);
 let rngTop=[-1,1], rngMid=[-1,1], rngBot=[-1,1];   // fixed y-axis ranges
 
 // the animation starts two tau-steps after t0
-function tStart(){ return TMIN+2*D; }
+function tStart(){ return TMIN+0.2; }
 
 let time=tStart();
 let playing=false;
