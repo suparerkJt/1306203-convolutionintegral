@@ -286,7 +286,7 @@ html = r"""
             <b>How to read the plots</b>
             <ol>
                 <li><b>Flip</b> h(τ) to get h(−τ).</li>
-                <li><b>Slide</b> it by t to get h(t−τ).</li>
+                <li><b>Shift</b> it by t to get h(t−τ).</li>
                 <li><b>Multiply</b> it with x(τ).</li>
                 <li><b>Integrate</b>: the shaded area is y(t).</li>
             </ol>
@@ -334,7 +334,7 @@ const $=s=>root.querySelector(s);
 // SETTINGS
 // ======================================
 
-const TMIN=-4, TMAX=10;       // visible range for tau and t
+const TMIN=-8, TMAX=20;       // visible range for tau and t
 const D=0.01;                 // tau resolution
 const K=2;                    // result curve is sampled every K*D seconds
 const N=Math.round((TMAX-TMIN)/D)+1;
@@ -376,7 +376,7 @@ function makeFn(s){
     if(s.type==="step")  return t=>t>=0?1:0;
     if(s.type==="pulse") return t=>(t>=0&&t<s.w)?1:0;
     if(s.type==="exp")   return t=>t>=0?Math.exp(-s.a*t):0;
-    return t=>t>=0?t:0;     // ramp
+    return t=>t>=0?0.2t:0;     // ramp
 }
 
 // ======================================
