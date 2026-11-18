@@ -309,7 +309,7 @@ html = r"""
             </select>
 
             <div class="grow">
-                <input id="tslider" type="range" min="-8" max="20" step="0.01" value="-4">
+                <input id="tslider" type="range" min="-6" max="12" step="0.01" value="-6">
             </div>
         </div>
 
@@ -334,7 +334,7 @@ const $=s=>root.querySelector(s);
 // SETTINGS
 // ======================================
 
-const TMIN=-8, TMAX=20;       // visible range for tau and t
+const TMIN=-6, TMAX=12;       // visible range for tau and t
 const D=0.01;                 // tau resolution
 const K=2;                    // result curve is sampled every K*D seconds
 const N=Math.round((TMAX-TMIN)/D)+1;
@@ -376,7 +376,7 @@ function makeFn(s){
     if(s.type==="step")  return t=>t>=0?1:0;
     if(s.type==="pulse") return t=>(t>=0&&t<s.w)?1:0;
     if(s.type==="exp")   return t=>t>=0?Math.exp(-s.a*t):0;
-    return t=>t>=0?0.2t:0;     // ramp
+    return t=>t>=0?t:0;     // ramp
 }
 
 // ======================================
