@@ -338,10 +338,10 @@ html = r"""
             <button class="reset" id="reset">↺ RESET</button>
 
             <select id="speed" title="Animation speed">
+                <option value="0.25">0.25× speed</option>
                 <option value="0.5">0.5× speed</option>
-                <option value="1" selected>1× speed</option>
-                <option value="2">2× speed</option>
-                <option value="4">4× speed</option>
+                <option value="1" selected>1.0× speed</option>
+                <option value="2">2.0× speed</option>
             </select>
 
             <div class="grow">
