@@ -376,7 +376,7 @@ function makeFn(s){
     if(s.type==="step")  return t=>t>=0?1:0;
     if(s.type==="pulse") return t=>(t>=0&&t<s.w)?1:0;
     if(s.type==="exp")   return t=>t>=0?Math.exp(-s.a*t):0;
-    return 0.25*t=>t>=0?t:0;     // ramp
+    return t=>t>=0?t:0;     // ramp
 }
 
 // ======================================
