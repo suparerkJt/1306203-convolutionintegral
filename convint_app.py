@@ -309,7 +309,7 @@ html = r"""
             </select>
 
             <div class="grow">
-                <input id="tslider" type="range" min="-8" max="12" step="0.01" value="-4">
+                <input id="tslider" type="range" min="-8" max="20" step="0.01" value="-4">
             </div>
         </div>
 
