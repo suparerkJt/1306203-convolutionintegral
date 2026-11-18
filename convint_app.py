@@ -392,7 +392,10 @@ let yArr=new Float64Array(0);     // full result y(t) on a time grid
 let tGrid=new Float64Array(0);
 let rngTop=[-1,1], rngMid=[-1,1], rngBot=[-1,1];   // fixed y-axis ranges
 
-let time=TMIN;
+// the animation starts two tau-steps after t0
+function tStart(){ return TMIN+2*D; }
+
+let time=tStart();
 let playing=false;
 let lastTs=null;
 let rafID=null;
@@ -1106,7 +1109,7 @@ function pause(){
 $("#play").addEventListener("click",()=>{
 
     if(playing) return;
-    if(time>=TMAX) time=TMIN;
+    if(time>=TMAX) time=tStart();
 
     playing=true;
     lastTs=null;
@@ -1117,7 +1120,7 @@ $("#pause").addEventListener("click",pause);
 
 $("#reset").addEventListener("click",()=>{
     pause();
-    time=TMIN;
+    time=tStart();
     render();
 });
 
