@@ -4,7 +4,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 st.set_page_config(
-    page_title="Convolution Integral",
+    page_title="1306203/Convolution Integral",
     layout="wide",
 )
 
@@ -295,7 +295,7 @@ html = r"""
 
 <button class="theme" id="theme">🌙 DARK MODE</button>
 
-<h2>Convolution Integral of Continuous-Time Signals</h2>
+<h2>1306203 Signals & Systems: Convolution Integral</h2>
 <div class="subtitle">y(t) = ∫ x(τ) · h(t − τ) dτ</div>
 
 <div class="layout">
