@@ -170,6 +170,28 @@ html = r"""
 #ROOT_ID .howto b { color:#2f6fed; }
 #ROOT_ID .howto ol { margin:6px 0 0; padding-left:20px; }
 
+#ROOT_ID .range h3 { margin:0 0 10px; font-size:17px; }
+#ROOT_ID .rangegrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+#ROOT_ID .rangegrid label { font-size:13px; font-weight:bold; }
+#ROOT_ID .rangegrid input {
+    display:block;
+    width:100%;
+    margin-top:5px;
+    padding:7px;
+    font-size:15px;
+    border:1px solid #b9c5e0;
+    border-radius:8px;
+    background:#ffffff;
+    color:#1f2a44;
+    text-align:center;
+}
+#ROOT_ID .rangegrid input:focus {
+    outline:none;
+    border-color:#2f6fed;
+    box-shadow:0 0 0 3px rgba(47,111,237,0.25);
+}
+#ROOT_ID .range .hint { margin-top:8px; font-size:12px; opacity:0.75; }
+
 /* ---------- right column ---------- */
 #ROOT_ID .right { min-width:0; }
 
@@ -243,6 +265,7 @@ html = r"""
 #ROOT_ID.dark .tile:hover,
 #ROOT_ID.dark .tile.active { border-color:var(--c); }
 #ROOT_ID.dark .param input,
+#ROOT_ID.dark .rangegrid input,
 #ROOT_ID.dark .controls select {
     background:#0f1522;
     color:#e6edf7;
@@ -282,11 +305,24 @@ html = r"""
         <div class="panel sigcard x" id="card_x"></div>
         <div class="panel sigcard h" id="card_h"></div>
 
+        <div class="panel range">
+            <h3>Time boundaries</h3>
+            <div class="rangegrid">
+                <label>t<sub>0</sub> (start, s)
+                    <input id="t0" type="number" value="-4" min="-50" max="99" step="1">
+                </label>
+                <label>t<sub>1</sub> (end, s)
+                    <input id="t1" type="number" value="10" min="-49" max="100" step="1">
+                </label>
+            </div>
+            <div class="hint">Sets the range of τ and t on all three plots (t<sub>1</sub> − t<sub>0</sub> ≥ 1). All signals start at t = 0.</div>
+        </div>
+
         <div class="panel howto">
             <b>How to read the plots</b>
             <ol>
                 <li><b>Flip</b> h(τ) to get h(−τ).</li>
-                <li><b>Shift</b> it by t to get h(t−τ).</li>
+                <li><b>Slide</b> it by t to get h(t−τ).</li>
                 <li><b>Multiply</b> it with x(τ).</li>
                 <li><b>Integrate</b>: the shaded area is y(t).</li>
             </ol>
@@ -309,7 +345,7 @@ html = r"""
             </select>
 
             <div class="grow">
-                <input id="tslider" type="range" min="-6" max="12" step="0.01" value="-6">
+                <input id="tslider" type="range" min="-4" max="10" step="0.01" value="-4">
             </div>
         </div>
 
@@ -334,13 +370,19 @@ const $=s=>root.querySelector(s);
 // SETTINGS
 // ======================================
 
-const TMIN=-6, TMAX=12;       // visible range for tau and t
-const D=0.01;                 // tau resolution
-const K=2;                    // result curve is sampled every K*D seconds
-const N=Math.round((TMAX-TMIN)/D)+1;
+let TMIN=-4, TMAX=10;         // visible range for tau and t (user inputs t0, t1)
+const N=2801;                 // number of tau samples across the range
+const K=2;                    // result curve is sampled every K samples
+let D=(TMAX-TMIN)/(N-1);      // tau resolution
 
 const tau=new Float64Array(N);
-for(let i=0;i<N;i++) tau[i]=TMIN+i*D;
+
+function setRange(a,b){
+    TMIN=a; TMAX=b;
+    D=(TMAX-TMIN)/(N-1);
+    for(let i=0;i<N;i++) tau[i]=TMIN+i*D;
+}
+setRange(TMIN,TMAX);
 
 const xArr=new Float64Array(N);   // x(tau)
 const hCur=new Float64Array(N);   // h(t-tau) for the current t
@@ -348,7 +390,7 @@ const pCur=new Float64Array(N);   // x(tau)*h(t-tau) for the current t
 
 let yArr=new Float64Array(0);     // full result y(t) on a time grid
 let tGrid=new Float64Array(0);
-let gX=1, gH=1, gP=1, gY=1;       // global maxima (fixed axis scales)
+let rngTop=[-1,1], rngMid=[-1,1], rngBot=[-1,1];   // fixed y-axis ranges
 
 let time=TMIN;
 let playing=false;
@@ -360,22 +402,39 @@ let xf=null, hf=null;
 // SIGNALS
 // ======================================
 
-const TYPES=[
-    {id:"step",  label:"Unit step",        path:"M2 19 H18 V5 H38"},
-    {id:"pulse", label:"Rect. pulse",      path:"M2 19 H10 V5 H26 V19 H38"},
-    {id:"exp",   label:"Decaying exp.",    path:"M2 19 H10 V5 C14 15 22 18 38 19"},
-    {id:"ramp",  label:"Ramp",             path:"M2 19 H12 L34 5"}
+const TYPES={
+    step: {label:"Unit step",     path:"M2 19 H18 V5 H38"},
+    pulse:{label:"Rect. pulse",   path:"M2 19 H10 V5 H26 V19 H38"},
+    exp:  {label:"Decaying exp.", path:"M2 19 H10 V5 C14 15 22 18 38 19"},
+    sine: {label:"Sinusoid",      path:"M2 12 C8 0 14 0 20 12 S32 24 38 12"},
+    ramp: {label:"Ramp",          path:"M2 19 H12 L34 5"}
+};
+
+// which signal types each card offers
+const CHOICES={
+    x:["step","pulse","exp","sine"],
+    h:["step","pulse","exp","ramp"]
+};
+
+// adjustable parameters and the signal types they belong to
+const PARAMS=[
+    {p:"A",label:"Amplitude A",                     types:["step","pulse","exp","sine"], min:-10,  max:10, step:0.1},
+    {p:"w",label:"Pulse width (s)",                 types:["pulse"],                     min:0.1,  max:50, step:0.1},
+    {p:"a",label:"Decay rate a  (e<sup>−at</sup>)", types:["exp"],                       min:0.1,  max:10, step:0.1},
+    {p:"f",label:"Frequency f (Hz)",                types:["sine"],                      min:0.05, max:5,  step:0.05}
 ];
 
 const sig={
-    x:{type:"pulse", w:2, a:1},
-    h:{type:"exp",   w:2, a:1}
+    x:{type:"pulse", A:1, w:2, a:1, f:1},
+    h:{type:"exp",   A:1, w:2, a:1, f:1}
 };
 
+// All signals start at t = 0 (causal)
 function makeFn(s){
-    if(s.type==="step")  return t=>t>=0?1:0;
-    if(s.type==="pulse") return t=>(t>=0&&t<s.w)?1:0;
-    if(s.type==="exp")   return t=>t>=0?Math.exp(-s.a*t):0;
+    if(s.type==="step")  return t=>t>=0?s.A:0;
+    if(s.type==="pulse") return t=>(t>=0&&t<s.w)?s.A:0;
+    if(s.type==="exp")   return t=>t>=0?s.A*Math.exp(-s.a*t):0;
+    if(s.type==="sine")  return t=>t>=0?s.A*Math.sin(2*Math.PI*s.f*t):0;
     return t=>t>=0?t:0;     // ramp
 }
 
@@ -390,20 +449,24 @@ function buildCard(key){
 
     let h='<h3>'+title+'</h3><div class="tiles">';
 
-    TYPES.forEach(t=>{
-        h+='<div class="tile" data-type="'+t.id+'">'+
-           '<svg viewBox="0 0 40 24"><path d="'+t.path+
+    CHOICES[key].forEach(id=>{
+        h+='<div class="tile" data-type="'+id+'">'+
+           '<svg viewBox="0 0 40 24"><path d="'+TYPES[id].path+
            '" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
-           t.label+'</div>';
+           TYPES[id].label+'</div>';
     });
 
     h+='</div>';
 
-    h+='<label class="param" data-for="pulse">Pulse width (s)'+
-       '<input type="number" data-p="w" min="0.2" max="6" step="0.1" value="'+sig[key].w+'"></label>';
+    PARAMS.forEach(q=>{
 
-    h+='<label class="param" data-for="exp">Decay rate a  (e<sup>−at</sup>)'+
-       '<input type="number" data-p="a" min="0.1" max="5" step="0.1" value="'+sig[key].a+'"></label>';
+        const used=q.types.filter(t=>CHOICES[key].includes(t));
+        if(used.length===0) return;
+
+        h+='<label class="param" data-for="'+used.join(" ")+'">'+q.label+
+           '<input type="number" data-p="'+q.p+'" min="'+q.min+'" max="'+q.max+
+           '" step="'+q.step+'" value="'+sig[key][q.p]+'"></label>';
+    });
 
     card.innerHTML=h;
 
@@ -443,7 +506,7 @@ function refreshCard(key){
     });
 
     card.querySelectorAll(".param").forEach(el=>{
-        el.classList.toggle("show",el.dataset.for===sig[key].type);
+        el.classList.toggle("show",el.dataset.for.split(" ").includes(sig[key].type));
     });
 }
 
@@ -488,71 +551,108 @@ applyTheme();
 // NUMERICS
 // ======================================
 
+// y(t) = integral of x(tau) h(t-tau) d tau.
+// All basic signals start at 0, so the integrand is non-zero only for
+// 0 <= tau <= t, independent of the plotted time boundaries t0 and t1.
+let lastMaxP=0, lastMinP=0;
+
+function integrate(t){
+
+    lastMaxP=0;
+    lastMinP=0;
+    if(t<=0) return 0;
+
+    // at least 1000 steps, and never coarser than 0.01 s (fast sinusoids)
+    const NI=Math.min(12000,Math.max(1000,Math.ceil(t/0.01)));
+    const st=t/NI;
+    let sum=0;
+
+    for(let k=0;k<NI;k++){
+
+        const ta=(k+0.5)*st;
+        const xv=xf(ta);
+        if(xv===0) continue;
+
+        const pv=xv*hf(t-ta);
+        sum+=pv;
+        if(pv>lastMaxP) lastMaxP=pv;
+        if(pv<lastMinP) lastMinP=pv;
+    }
+
+    return sum*st;
+}
+
+// axis range that always contains zero, with a little padding
+function padRange(lo,hi){
+
+    lo=Math.min(0,lo);
+    hi=Math.max(0,hi);
+
+    let span=hi-lo;
+    if(span<1e-9){ lo=-1; hi=1; span=2; }
+
+    return [lo-0.12*span, hi+0.12*span];
+}
+
 function recompute(){
 
     xf=makeFn(sig.x);
     hf=makeFn(sig.h);
 
-    let mx=0;
+    let xlo=0, xhi=0;
     for(let i=0;i<N;i++){
         xArr[i]=xf(tau[i]);
-        if(xArr[i]>mx) mx=xArr[i];
+        if(xArr[i]>xhi) xhi=xArr[i];
+        if(xArr[i]<xlo) xlo=xArr[i];
     }
 
-    let mh=0;
-    for(let s=0;s<=TMAX-TMIN;s+=0.05){
-        const v=hf(s);
-        if(v>mh) mh=v;
+    // h(t - tau) takes the values of h(s) for s up to the plotted range
+    // (ramps are clipped to 6 so that unit-size signals stay readable)
+    const cap=sig.h.type==="ramp"?6:Infinity;
+    let hlo=0, hhi=0;
+    for(let k=0;k<=400;k++){
+        const v=hf(k*(TMAX-TMIN)/400);
+        if(v>hhi) hhi=v;
+        if(v<hlo) hlo=v;
     }
+    hhi=Math.min(hhi,cap);
 
-    gX=mx||1;
-    gH=mh||1;
+    rngTop=padRange(Math.min(xlo,hlo),Math.max(xhi,hhi));
 
-    // Full result y(t) = integral of x(tau) h(t-tau) d tau
+    // Full result y(t) on a time grid
     const M=Math.floor((N-1)/K)+1;
     yArr=new Float64Array(M);
     tGrid=new Float64Array(M);
 
-    let pm=0, ym=0;
+    let plo=0, phi=0, ylo=0, yhi=0;
 
     for(let j=0;j<M;j++){
 
         const t=TMIN+j*K*D;
         tGrid[j]=t;
 
-        let sum=0;
+        yArr[j]=integrate(t);
 
-        for(let i=0;i<N;i++){
-
-            const xv=xArr[i];
-            if(xv===0) continue;
-
-            const pv=xv*hf(t-tau[i]);
-            sum+=pv;
-            if(pv>pm) pm=pv;
-        }
-
-        yArr[j]=sum*D;
-        if(yArr[j]>ym) ym=yArr[j];
+        if(lastMaxP>phi) phi=lastMaxP;
+        if(lastMinP<plo) plo=lastMinP;
+        if(yArr[j]>yhi) yhi=yArr[j];
+        if(yArr[j]<ylo) ylo=yArr[j];
     }
 
-    gP=pm>1e-9?pm:1;
-    gY=ym>1e-9?ym:1;
+    rngMid=padRange(plo,phi);
+    rngBot=padRange(ylo,yhi);
 }
 
 // h(t-tau), the product, and the area for one value of t
 function computeAt(t){
 
-    let sum=0;
-
     for(let i=0;i<N;i++){
         const hv=hf(t-tau[i]);
         hCur[i]=hv;
         pCur[i]=xArr[i]*hv;
-        sum+=pCur[i];
     }
 
-    return sum*D;
+    return integrate(t);
 }
 
 // ======================================
@@ -752,9 +852,7 @@ function drawTop(t){
 
     const ctx=begin(cTop);
 
-    // Very large values (e.g. ramps) are clipped to keep unit signals readable
-    const s0=Math.max(1.2,Math.min(Math.max(gX,gH),6))*1.12;
-    const P=makeArea(cTop,-0.12*s0,s0);
+    const P=makeArea(cTop,rngTop[0],rngTop[1]);
 
     drawAxes(ctx,P,"① x(τ)  and  h(t − τ)","τ  (dummy variable)");
 
@@ -800,8 +898,7 @@ function drawMid(t,area){
 
     const ctx=begin(cMid);
 
-    const top=gP*1.18;
-    const P=makeArea(cMid,-0.12*top,top);
+    const P=makeArea(cMid,rngMid[0],rngMid[1]);
 
     drawAxes(ctx,P,"② x(τ) · h(t − τ)   (shaded area = y(t))","τ  (dummy variable)");
 
@@ -859,8 +956,7 @@ function drawBot(t,area){
 
     const ctx=begin(cBot);
 
-    const top=gY*1.18;
-    const P=makeArea(cBot,-0.1*top,top);
+    const P=makeArea(cBot,rngBot[0],rngBot[1]);
 
     drawAxes(ctx,P,"③ y(t) = x(t) ∗ h(t)","t  (seconds)");
 
@@ -944,11 +1040,41 @@ function update(){
     render();
 }
 
+function applyRange(){
+
+    let a=Number($("#t0").value);
+    let b=Number($("#t1").value);
+
+    if(!Number.isFinite(a)||!Number.isFinite(b)){
+        $("#t0").value=TMIN;
+        $("#t1").value=TMAX;
+        return;
+    }
+
+    a=Math.min(99,Math.max(-50,a));
+    b=Math.min(100,Math.max(a+1,b));
+
+    $("#t0").value=a;
+    $("#t1").value=b;
+
+    setRange(a,b);
+
+    const sl=$("#tslider");
+    sl.min=a;
+    sl.max=b;
+
+    time=Math.min(b,Math.max(a,time));
+
+    update();
+}
+
+$("#t0").addEventListener("change",applyRange);
+$("#t1").addEventListener("change",applyRange);
+
 // ======================================
 // ANIMATION
 // ======================================
 
-const BASE_SPEED=2;   // seconds of signal time per real second
 
 function animate(ts){
 
@@ -956,7 +1082,7 @@ function animate(ts){
 
     if(lastTs!==null){
         const dt=Math.min((ts-lastTs)/1000,0.05);
-        time+=dt*BASE_SPEED*Number($("#speed").value);
+        time+=dt*((TMAX-TMIN)/7)*Number($("#speed").value);
     }
 
     lastTs=ts;
@@ -1019,7 +1145,7 @@ window.addEventListener("resize",resize);
 
 // initial display
 fit();
-update();
+applyRange();
 
 })();
 </script>
