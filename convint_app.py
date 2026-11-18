@@ -322,7 +322,7 @@ html = r"""
             <b>How to read the plots</b>
             <ol>
                 <li><b>Flip</b> h(τ) to get h(−τ).</li>
-                <li><b>Slide</b> it by t to get h(t−τ).</li>
+                <li><b>Shift</b> it by t to get h(t−τ).</li>
                 <li><b>Multiply</b> it with x(τ).</li>
                 <li><b>Integrate</b>: the shaded area is y(t).</li>
             </ol>
@@ -407,19 +407,19 @@ const TYPES={
     pulse:{label:"Rect. pulse",   path:"M2 19 H10 V5 H26 V19 H38"},
     exp:  {label:"Decaying exp.", path:"M2 19 H10 V5 C14 15 22 18 38 19"},
     sine: {label:"Sinusoid",      path:"M2 12 C8 0 14 0 20 12 S32 24 38 12"},
-    ramp: {label:"Ramp",          path:"M2 19 H12 L34 5"}
+    tri:  {label:"Triangular",    path:"M2 19 H10 L26 5 V19 H38"}
 };
 
 // which signal types each card offers
 const CHOICES={
     x:["step","pulse","exp","sine"],
-    h:["step","pulse","exp","ramp"]
+    h:["step","pulse","exp","tri"]
 };
 
 // adjustable parameters and the signal types they belong to
 const PARAMS=[
-    {p:"A",label:"Amplitude A",                     types:["step","pulse","exp","sine"], min:-10,  max:10, step:0.1},
-    {p:"w",label:"Pulse width (s)",                 types:["pulse"],                     min:0.1,  max:50, step:0.1},
+    {p:"A",label:"Amplitude A",                     types:["step","pulse","exp","sine","tri"], min:-10,  max:10, step:0.1},
+    {p:"w",label:"Width (s)",                       types:["pulse","tri"],                     min:0.1,  max:50, step:0.1},
     {p:"a",label:"Decay rate a  (e<sup>−at</sup>)", types:["exp"],                       min:0.1,  max:10, step:0.1},
     {p:"f",label:"Frequency f (Hz)",                types:["sine"],                      min:0.05, max:5,  step:0.05}
 ];
@@ -435,7 +435,8 @@ function makeFn(s){
     if(s.type==="pulse") return t=>(t>=0&&t<s.w)?s.A:0;
     if(s.type==="exp")   return t=>t>=0?s.A*Math.exp(-s.a*t):0;
     if(s.type==="sine")  return t=>t>=0?s.A*Math.sin(2*Math.PI*s.f*t):0;
-    return t=>t>=0?t:0;     // ramp
+    // triangular: ramp from 0 up to A at t = w, and zero afterwards
+    return t=>(t>=0&&t<s.w)?s.A*t/s.w:0;
 }
 
 // ======================================
@@ -607,15 +608,12 @@ function recompute(){
     }
 
     // h(t - tau) takes the values of h(s) for s up to the plotted range
-    // (ramps are clipped to 6 so that unit-size signals stay readable)
-    const cap=sig.h.type==="ramp"?6:Infinity;
     let hlo=0, hhi=0;
     for(let k=0;k<=400;k++){
         const v=hf(k*(TMAX-TMIN)/400);
         if(v>hhi) hhi=v;
         if(v<hlo) hlo=v;
     }
-    hhi=Math.min(hhi,cap);
 
     rngTop=padRange(Math.min(xlo,hlo),Math.max(xhi,hhi));
 
