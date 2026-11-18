@@ -315,7 +315,7 @@ html = r"""
                     <input id="t1" type="number" value="10" min="-49" max="100" step="1">
                 </label>
             </div>
-            <div class="hint">Sets the range of τ and t on all three plots (t<sub>1</sub> − t<sub>0</sub> ≥ 1). All signals start at t = 0.</div>
+            <div class="hint">Sets the range of τ and t on all three plots (t<sub>1</sub> − t<sub>0</sub> ≥ 1). Signals start at t = 0 (a unit step starts at its shift time T<sub>0</sub>).</div>
         </div>
 
         <div class="panel howto">
@@ -392,10 +392,11 @@ let yArr=new Float64Array(0);     // full result y(t) on a time grid
 let tGrid=new Float64Array(0);
 let rngTop=[-1,1], rngMid=[-1,1], rngBot=[-1,1];   // fixed y-axis ranges
 
-// the animation starts two tau-steps after t0
-function tStart(){ return 0.00; }
+// initial position of h(t - tau): t = 0 (or the nearest end of the range)
+function initialTime(){ return Math.min(TMAX,Math.max(TMIN,0)); }
 
-let time=tStart();
+let time=initialTime();
+let fresh=true;      // true until the animation is started or scrubbed
 let playing=false;
 let lastTs=null;
 let rafID=null;
@@ -422,19 +423,20 @@ const CHOICES={
 // adjustable parameters and the signal types they belong to
 const PARAMS=[
     {p:"A",label:"Amplitude A",                     types:["step","pulse","exp","sine","tri"], min:-10,  max:10, step:0.1},
+    {p:"T0",label:"Shift time T<sub>0</sub> (s)  —  u(t − T<sub>0</sub>)", types:["step"], min:-20, max:20, step:0.1},
     {p:"w",label:"Width (s)",                       types:["pulse","tri"],                     min:0.1,  max:50, step:0.1},
     {p:"a",label:"Decay rate a  (e<sup>−at</sup>)", types:["exp"],                       min:0.1,  max:10, step:0.1},
     {p:"f",label:"Frequency f (Hz)",                types:["sine"],                      min:0.05, max:5,  step:0.05}
 ];
 
 const sig={
-    x:{type:"pulse", A:1, w:2, a:1, f:1},
-    h:{type:"exp",   A:1, w:2, a:1, f:1}
+    x:{type:"pulse", A:1, w:2, a:1, f:1, T0:0},
+    h:{type:"exp",   A:1, w:2, a:1, f:1, T0:0}
 };
 
-// All signals start at t = 0 (causal)
+// All signals start at t = 0, except the unit step which starts at t = T0
 function makeFn(s){
-    if(s.type==="step")  return t=>t>=0?s.A:0;
+    if(s.type==="step")  return t=>t>=s.T0?s.A:0;
     if(s.type==="pulse") return t=>(t>=0&&t<s.w)?s.A:0;
     if(s.type==="exp")   return t=>t>=0?s.A*Math.exp(-s.a*t):0;
     if(s.type==="sine")  return t=>t>=0?s.A*Math.sin(2*Math.PI*s.f*t):0;
@@ -556,24 +558,34 @@ applyTheme();
 // ======================================
 
 // y(t) = integral of x(tau) h(t-tau) d tau.
-// All basic signals start at 0, so the integrand is non-zero only for
-// 0 <= tau <= t, independent of the plotted time boundaries t0 and t1.
+// x(tau) is zero before its start time and h(t-tau) is zero for tau > t - (start of h),
+// so the integrand is non-zero only for  xStart <= tau <= t - hStart.
+// (Independent of the plotted time boundaries t0 and t1.)
 let lastMaxP=0, lastMinP=0;
+let xStart=0, hStart=0;
+
+function startOf(sg){ return sg.type==="step"?sg.T0:0; }
 
 function integrate(t){
 
     lastMaxP=0;
     lastMinP=0;
-    if(t<=0) return 0;
+
+    const lo=xStart;
+    const hi=t-hStart;
+
+    if(hi<=lo) return 0;
+
+    const L=hi-lo;
 
     // at least 1000 steps, and never coarser than 0.01 s (fast sinusoids)
-    const NI=Math.min(12000,Math.max(1000,Math.ceil(t/0.01)));
-    const st=t/NI;
+    const NI=Math.min(12000,Math.max(1000,Math.ceil(L/0.01)));
+    const st=L/NI;
     let sum=0;
 
     for(let k=0;k<NI;k++){
 
-        const ta=(k+0.5)*st;
+        const ta=lo+(k+0.5)*st;
         const xv=xf(ta);
         if(xv===0) continue;
 
@@ -602,6 +614,8 @@ function recompute(){
 
     xf=makeFn(sig.x);
     hf=makeFn(sig.h);
+    xStart=startOf(sig.x);
+    hStart=startOf(sig.h);
 
     let xlo=0, xhi=0;
     for(let i=0;i<N;i++){
@@ -612,7 +626,7 @@ function recompute(){
 
     // h(t - tau) takes the values of h(s) for s up to the plotted range
     let hlo=0, hhi=0;
-    for(let k=0;k<=400;k++){
+    for(let k=-400;k<=400;k++){
         const v=hf(k*(TMAX-TMIN)/400);
         if(v>hhi) hhi=v;
         if(v<hlo) hlo=v;
@@ -1064,7 +1078,9 @@ function applyRange(){
     sl.min=a;
     sl.max=b;
 
-    time=Math.min(b,Math.max(a,time));
+    pause();
+    time=initialTime();
+    fresh=true;
 
     update();
 }
@@ -1109,7 +1125,9 @@ function pause(){
 $("#play").addEventListener("click",()=>{
 
     if(playing) return;
-    if(time>=TMAX) time=tStart();
+    // a fresh simulation (or a finished one) starts at t = TMIN
+    if(fresh||time>=TMAX) time=TMIN;
+    fresh=false;
 
     playing=true;
     lastTs=null;
@@ -1120,12 +1138,14 @@ $("#pause").addEventListener("click",pause);
 
 $("#reset").addEventListener("click",()=>{
     pause();
-    time=tStart();
+    time=initialTime();
+    fresh=true;
     render();
 });
 
 $("#tslider").addEventListener("input",e=>{
     pause();
+    fresh=false;
     time=Number(e.target.value);
     render();
 });
